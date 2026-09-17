@@ -1,3 +1,6 @@
+# Локальный конфиг с API-ключом — НЕ коммитить!
+config.local.js
+
 # Локальные файлы
 .DS_Store
 node_modules/

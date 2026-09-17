@@ -34,7 +34,13 @@ const defaultSettings = {
   openaiKey: '',
   openaiModel: 'llama-3.3-70b-versatile',
 };
-let settings = Object.assign({}, defaultSettings, LS.get(KEYS.settings, {}));
+// Порядок приоритета: значения по умолчанию → config.local.js → сохранённые в браузере.
+let settings = Object.assign(
+  {},
+  defaultSettings,
+  (typeof window !== 'undefined' && window.MET_CONFIG) ? window.MET_CONFIG : {},
+  LS.get(KEYS.settings, {})
+);
 
 /* ---------- Прогресс ---------- */
 const defaultProgress = { streak: 0, lastActive: null, totalMessages: 0, days: {} };
