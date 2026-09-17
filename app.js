@@ -336,11 +336,13 @@ function showError(err) {
   const wrap = document.createElement('div');
   wrap.className = 'msg bot';
   const msg = String(err && err.message ? err.message : err);
+  const tip = settings.provider === 'ollama'
+    ? `Убедись, что Ollama запущен, а модель скачана (<code>ollama pull ${escapeHtml(settings.ollamaModel)}</code>).`
+    : 'Скорее всего, сеть/провайдер нестабильно пропускает запросы к этому сервису. Попробуй ещё раз, смени сеть (мобильный интернет / VPN) или перейди на локальную модель Ollama.';
   wrap.innerHTML = `<div class="bubble">
     <p>⚠️ <strong>Не получилось получить ответ.</strong></p>
     <p>${escapeHtml(msg)}</p>
-    <p>Проверь настройки (⚙️). Если используешь Ollama — убедись, что он запущен, а модель скачана
-    (<code>ollama pull ${escapeHtml(settings.ollamaModel)}</code>). Подробнее в README.</p>
+    <p>${tip}</p>
   </div>`;
   el.messages.appendChild(wrap);
   scrollToBottom();
@@ -354,6 +356,24 @@ async function streamChat(messages, onToken) {
     return streamOllama(messages, onToken);
   }
   return streamOpenAI(messages, onToken);
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// fetch с автоповтором при обрыве соединения / 5xx (помогает на нестабильной сети).
+async function fetchWithRetry(url, opts, tries = 4) {
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(url, opts);
+      if (res.status >= 500 && i < tries - 1) { await sleep(500 * (i + 1)); continue; }
+      return res;
+    } catch (e) {
+      lastErr = e;
+      if (i < tries - 1) await sleep(500 * (i + 1));
+    }
+  }
+  throw lastErr || new Error('network');
 }
 
 async function streamOllama(messages, onToken) {
@@ -399,7 +419,7 @@ async function streamOpenAI(messages, onToken) {
   const url = base + '/chat/completions';
   let res;
   try {
-    res = await fetch(url, {
+    res = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -408,7 +428,7 @@ async function streamOpenAI(messages, onToken) {
       body: JSON.stringify({ model: settings.openaiModel, messages, stream: true }),
     });
   } catch (e) {
-    throw new Error('Не удалось подключиться к API по адресу ' + base + '. Проверь Base URL и интернет.');
+    throw new Error('Не удалось подключиться к API (' + base + ') после нескольких попыток. Похоже, твоя сеть/провайдер блокирует доступ к этому сервису. Попробуй мобильный интернет, VPN или локальную модель Ollama.');
   }
   if (!res.ok) {
     const t = await res.text().catch(() => '');
@@ -857,7 +877,7 @@ async function transcribeGroq(blob, filename) {
   fd.append('file', blob, filename || 'audio.webm');
   fd.append('model', settings.sttModel || 'whisper-large-v3-turbo');
   fd.append('response_format', 'json');
-  const res = await fetch(base + '/audio/transcriptions', {
+  const res = await fetchWithRetry(base + '/audio/transcriptions', {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + settings.openaiKey },
     body: fd,
