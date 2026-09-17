@@ -851,12 +851,11 @@ function errText(code) {
 }
 
 /* --- Распознавание через Groq Whisper (работает в любом браузере) --- */
-async function transcribeGroq(blob) {
+async function transcribeGroq(blob, filename) {
   const base = settings.openaiUrl.replace(/\/$/, '');
   const fd = new FormData();
-  fd.append('file', blob, 'audio.webm');
+  fd.append('file', blob, filename || 'audio.webm');
   fd.append('model', settings.sttModel || 'whisper-large-v3-turbo');
-  fd.append('language', 'en');
   fd.append('response_format', 'json');
   const res = await fetch(base + '/audio/transcriptions', {
     method: 'POST',
@@ -869,6 +868,22 @@ async function transcribeGroq(blob) {
   }
   const data = await res.json().catch(() => ({}));
   return (data.text || '').trim();
+}
+
+// Выбор поддерживаемого формата записи (важно для Safari/iOS).
+function pickAudioType() {
+  const cands = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
+  if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+    for (const c of cands) { if (MediaRecorder.isTypeSupported(c)) return c; }
+  }
+  return '';
+}
+function extForMime(mime) {
+  if (!mime) return 'webm';
+  if (mime.includes('mp4')) return 'mp4';
+  if (mime.includes('ogg')) return 'ogg';
+  if (mime.includes('wav')) return 'wav';
+  return 'webm';
 }
 
 function whisperAvailable() {
@@ -886,20 +901,25 @@ function beginWhisperCapture(h) {
   navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => {
     stream = s;
     if (stopped) { s.getTracks().forEach((t) => t.stop()); return; }
-    try { mr = new MediaRecorder(s); }
-    catch { h.onError && h.onError('Этот браузер не умеет записывать звук.'); s.getTracks().forEach((t) => t.stop()); return; }
+    const type = pickAudioType();
+    try { mr = type ? new MediaRecorder(s, { mimeType: type }) : new MediaRecorder(s); }
+    catch {
+      try { mr = new MediaRecorder(s); }
+      catch { h.onError && h.onError('Этот браузер не умеет записывать звук.'); s.getTracks().forEach((t) => t.stop()); return; }
+    }
     mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     mr.onstop = async () => {
       stream.getTracks().forEach((t) => t.stop());
       if (chunks.length === 0) { h.onFinal && h.onFinal(''); return; }
       h.onTranscribing && h.onTranscribing();
       try {
-        const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
-        const text = await transcribeGroq(blob);
+        const mime = mr.mimeType || type || 'audio/webm';
+        const blob = new Blob(chunks, { type: mime });
+        const text = await transcribeGroq(blob, 'audio.' + extForMime(mime));
         h.onFinal && h.onFinal(text);
       } catch (err) { h.onError && h.onError(err.message || String(err)); }
     };
-    mr.start();
+    mr.start(1000); // timeslice: данные идут порциями (надёжнее в Safari)
     h.onListeningStart && h.onListeningStart();
   }).catch(() => {
     h.onError && h.onError('Нет доступа к микрофону. Разреши доступ и открой сайт по https или на localhost.');
@@ -937,6 +957,18 @@ function speakThen(text, cb) {
   u.onend = () => cb && cb();
   u.onerror = () => cb && cb();
   window.speechSynthesis.speak(u);
+}
+
+// iOS/Safari разрешают озвучку только после касания. «Будим» синтезатор в жесте.
+let ttsUnlocked = false;
+function unlockTTS() {
+  if (ttsUnlocked || !('speechSynthesis' in window)) return;
+  try {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    window.speechSynthesis.speak(u);
+    ttsUnlocked = true;
+  } catch {}
 }
 
 /* ============================================================
@@ -987,6 +1019,7 @@ function talkMicActive(on) {
 
 function toggleTalk() {
   if (talkBusy) return;
+  unlockTTS();
   if (talkController) { talkController.stop(); return; } // идёт запись → остановить
   startTalkCapture();
 }
@@ -1196,6 +1229,7 @@ function pronMicActive(on) {
 }
 
 function togglePron() {
+  unlockTTS();
   if (pronController) { pronController.stop(); return; }
   window.speechSynthesis && window.speechSynthesis.cancel();
   pronController = beginCapture({
