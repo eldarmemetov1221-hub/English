@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>My English Tutor</title>
+  <meta name="description" content="Личный AI-репетитор английского языка. Работает бесплатно на локальной модели." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Шапка -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-logo">🎓</span>
+        <div class="brand-text">
+          <strong>My English Tutor</strong>
+          <small id="statusLine">Проверяю подключение…</small>
+        </div>
+      </div>
+      <button class="icon-btn" id="openSettings" title="Настройки" aria-label="Настройки">⚙️</button>
+    </header>
+
+    <!-- Вкладки -->
+    <main class="content">
+      <!-- ЧАТ -->
+      <section class="tab-panel active" id="tab-chat">
+        <div class="chat-toolbar">
+          <label class="field-inline">
+            <span>Уровень</span>
+            <select id="levelSelect">
+              <option value="Beginner (A1-A2)">Начальный (A1–A2)</option>
+              <option value="Intermediate (B1-B2)" selected>Средний (B1–B2)</option>
+              <option value="Advanced (C1-C2)">Продвинутый (C1–C2)</option>
+            </select>
+          </label>
+          <label class="field-inline">
+            <span>Тема</span>
+            <select id="scenarioSelect">
+              <option value="free">Свободный разговор</option>
+              <option value="cafe">В кафе / ресторане</option>
+              <option value="travel">Путешествие / аэропорт</option>
+              <option value="job">Собеседование на работу</option>
+              <option value="shopping">Покупки в магазине</option>
+              <option value="doctor">У врача</option>
+              <option value="smalltalk">Small talk / знакомство</option>
+            </select>
+          </label>
+          <button class="ghost-btn" id="newChatBtn" title="Начать новый диалог">🗑 Новый</button>
+        </div>
+
+        <div class="messages" id="messages" aria-live="polite"></div>
+
+        <form class="composer" id="composer" autocomplete="off">
+          <textarea id="input" rows="1" placeholder="Напиши сообщение по-английски… (можно и по-русски — репетитор поможет)"></textarea>
+          <button type="submit" id="sendBtn" class="send-btn" title="Отправить">➤</button>
+        </form>
+        <p class="hint" id="composerHint">Enter — отправить · Shift+Enter — перенос строки</p>
+      </section>
+
+      <!-- СЛОВАРЬ -->
+      <section class="tab-panel" id="tab-vocab">
+        <div class="vocab-head">
+          <h2>Мой словарь</h2>
+          <form id="addWordForm" class="add-word">
+            <input id="wordEn" placeholder="Слово / фраза (EN)" />
+            <input id="wordRu" placeholder="Перевод (RU)" />
+            <button type="submit" class="primary-btn">＋ Добавить</button>
+          </form>
+        </div>
+
+        <div id="reviewArea" class="review-card hidden">
+          <div class="review-top">
+            <span class="review-count" id="reviewCount"></span>
+            <button class="ghost-btn" id="closeReview">✕</button>
+          </div>
+          <div class="flashcard" id="flashcard">
+            <div class="flash-front" id="flashFront"></div>
+            <div class="flash-back hidden" id="flashBack"></div>
+          </div>
+          <div class="review-actions" id="reviewShow">
+            <button class="primary-btn" id="showAnswerBtn">Показать ответ</button>
+          </div>
+          <div class="review-actions hidden" id="reviewGrade">
+            <button class="grade-btn hard" data-grade="0">Не помню</button>
+            <button class="grade-btn ok" data-grade="1">Сложно</button>
+            <button class="grade-btn easy" data-grade="2">Легко</button>
+          </div>
+        </div>
+
+        <div class="vocab-controls">
+          <button class="primary-btn" id="startReviewBtn">🔁 Повторять карточки</button>
+          <span class="muted" id="dueInfo"></span>
+        </div>
+
+        <ul class="word-list" id="wordList"></ul>
+        <p class="empty-state hidden" id="vocabEmpty">Пока пусто. Добавляй новые слова вручную или кнопкой «Сохранить» под сообщениями репетитора.</p>
+      </section>
+
+      <!-- ПРОГРЕСС -->
+      <section class="tab-panel" id="tab-progress">
+        <h2>Прогресс</h2>
+        <div class="stat-grid">
+          <div class="stat-tile">
+            <span class="stat-value" id="statStreak">0</span>
+            <span class="stat-label">🔥 дней подряд</span>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-value" id="statMessages">0</span>
+            <span class="stat-label">💬 сообщений</span>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-value" id="statWords">0</span>
+            <span class="stat-label">📚 слов в словаре</span>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-value" id="statLearned">0</span>
+            <span class="stat-label">✅ выучено</span>
+          </div>
+        </div>
+        <h3>Активность за 14 дней</h3>
+        <div class="activity" id="activityChart"></div>
+        <button class="ghost-btn danger" id="resetProgress">Сбросить весь прогресс</button>
+      </section>
+    </main>
+
+    <!-- Нижняя навигация -->
+    <nav class="tabbar">
+      <button class="tab-btn active" data-tab="chat">💬<span>Чат</span></button>
+      <button class="tab-btn" data-tab="vocab">📚<span>Словарь</span></button>
+      <button class="tab-btn" data-tab="progress">📈<span>Прогресс</span></button>
+    </nav>
+  </div>
+
+  <!-- Модалка настроек -->
+  <div class="modal-backdrop hidden" id="settingsModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>Настройки AI</h2>
+        <button class="icon-btn" id="closeSettings">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="field">
+          <span>Провайдер</span>
+          <select id="providerSelect">
+            <option value="ollama">Ollama (локально, бесплатно)</option>
+            <option value="openai">Облачный API (Groq / Gemini / OpenAI)</option>
+          </select>
+        </label>
+
+        <div id="ollamaFields">
+          <label class="field">
+            <span>Адрес Ollama</span>
+            <input id="ollamaUrl" value="http://localhost:11434" />
+          </label>
+          <label class="field">
+            <span>Модель</span>
+            <input id="ollamaModel" placeholder="например: llama3.2 или qwen2.5" value="llama3.2" />
+          </label>
+          <p class="help">
+            Установи <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>, затем в терминале:
+            <code>ollama pull llama3.2</code>. Подробнее — в README.
+          </p>
+        </div>
+
+        <div id="openaiFields" class="hidden">
+          <label class="field">
+            <span>Base URL</span>
+            <input id="openaiUrl" placeholder="https://api.groq.com/openai/v1" />
+          </label>
+          <label class="field">
+            <span>API-ключ</span>
+            <input id="openaiKey" type="password" placeholder="вставь ключ" />
+          </label>
+          <label class="field">
+            <span>Модель</span>
+            <input id="openaiModel" placeholder="например: llama-3.3-70b-versatile" />
+          </label>
+          <p class="help">
+            Бесплатные варианты: <a href="https://console.groq.com" target="_blank" rel="noopener">Groq</a>
+            (Base URL <code>https://api.groq.com/openai/v1</code>) или
+            <a href="https://aistudio.google.com" target="_blank" rel="noopener">Google AI Studio</a>
+            (Base URL <code>https://generativelanguage.googleapis.com/v1beta/openai</code>).
+            Ключ хранится только у тебя в браузере.
+          </p>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="ghost-btn" id="testConnBtn">Проверить связь</button>
+        <button class="primary-btn" id="saveSettings">Сохранить</button>
+      </div>
+      <p class="conn-result" id="connResult"></p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
