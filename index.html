@@ -98,6 +98,59 @@
         <p class="empty-state hidden" id="vocabEmpty">Пока пусто. Добавляй новые слова вручную или кнопкой «Сохранить» под сообщениями репетитора.</p>
       </section>
 
+      <!-- РАЗГОВОР (голосом) -->
+      <section class="tab-panel" id="tab-talk">
+        <div class="talk-toolbar">
+          <label class="field-inline">
+            <span>Уровень</span>
+            <select id="talkLevel">
+              <option value="Beginner (A1-A2)">Начальный (A1–A2)</option>
+              <option value="Intermediate (B1-B2)" selected>Средний (B1–B2)</option>
+              <option value="Advanced (C1-C2)">Продвинутый (C1–C2)</option>
+            </select>
+          </label>
+          <label class="auto-toggle">
+            <input type="checkbox" id="autoTalk" /> Без рук
+          </label>
+          <button class="ghost-btn" id="talkClear" title="Очистить">🗑</button>
+        </div>
+        <div class="talk-log" id="talkLog"></div>
+        <div class="talk-panel">
+          <button class="mic-btn" id="talkMic" aria-label="Говорить">🎤</button>
+          <p class="talk-status" id="talkStatus">Нажми на микрофон и говори по-английски</p>
+        </div>
+      </section>
+
+      <!-- ПРОИЗНОШЕНИЕ (упражнения) -->
+      <section class="tab-panel" id="tab-pron">
+        <div class="pron-toolbar">
+          <label class="field-inline">
+            <span>Уровень</span>
+            <select id="pronLevel">
+              <option value="beginner">Начальный</option>
+              <option value="intermediate" selected>Средний</option>
+              <option value="advanced">Продвинутый</option>
+            </select>
+          </label>
+          <button class="ghost-btn" id="pronNew">➡️ Другая фраза</button>
+          <button class="ghost-btn" id="pronAI" title="Сгенерировать новую фразу через ИИ">✨ ИИ</button>
+        </div>
+        <div class="pron-card">
+          <p class="pron-hint">Прочитай вслух эту фразу:</p>
+          <p class="pron-target" id="pronTarget">…</p>
+          <div class="pron-actions">
+            <button class="mini-btn" id="pronListen">🔊 Послушать</button>
+            <button class="mic-btn small" id="pronMic" aria-label="Произнести">🎤</button>
+          </div>
+          <p class="pron-status" id="pronStatus">Нажми 🎤 и произнеси фразу</p>
+          <div class="pron-result hidden" id="pronResult">
+            <div class="pron-score" id="pronScore"></div>
+            <p class="pron-marked" id="pronMarked"></p>
+            <p class="pron-heard" id="pronHeard"></p>
+          </div>
+        </div>
+      </section>
+
       <!-- ПРОГРЕСС -->
       <section class="tab-panel" id="tab-progress">
         <h2>Прогресс</h2>
@@ -128,6 +181,8 @@
     <!-- Нижняя навигация -->
     <nav class="tabbar">
       <button class="tab-btn active" data-tab="chat">💬<span>Чат</span></button>
+      <button class="tab-btn" data-tab="talk">🎙️<span>Разговор</span></button>
+      <button class="tab-btn" data-tab="pron">🗣️<span>Речь</span></button>
       <button class="tab-btn" data-tab="vocab">📚<span>Словарь</span></button>
       <button class="tab-btn" data-tab="progress">📈<span>Прогресс</span></button>
     </nav>

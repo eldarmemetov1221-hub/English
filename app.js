@@ -798,7 +798,355 @@ function init() {
 
   renderVocab();
   updateProgressUI();
+  initVoice();
   checkStatus();
+}
+
+/* ============================================================
+   РАСПОЗНАВАНИЕ РЕЧИ (Web Speech API)
+   ============================================================ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function speechSupported() { return !!SR; }
+
+// Универсальный однократный слушатель (push-to-talk).
+function listenOnce({ onInterim, onFinal, onError, onEnd }) {
+  if (!SR) { onError && onError('Браузер не поддерживает распознавание речи. Открой приложение в Chrome или Edge.'); return null; }
+  const r = new SR();
+  r.lang = 'en-US';
+  r.interimResults = true;
+  r.continuous = false;
+  r.maxAlternatives = 1;
+  let finalText = '';
+  r.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const res = e.results[i];
+      if (res.isFinal) finalText += res[0].transcript;
+      else interim += res[0].transcript;
+    }
+    onInterim && onInterim((finalText + interim).trim());
+  };
+  r.onerror = (e) => { onError && onError(errText(e.error)); };
+  r.onend = () => { onEnd && onEnd(finalText.trim()); };
+  try { r.start(); } catch { onError && onError('Не удалось запустить микрофон.'); }
+  return r;
+}
+
+function errText(code) {
+  const map = {
+    'not-allowed': 'Нет доступа к микрофону. Разреши его в настройках браузера.',
+    'service-not-allowed': 'Нет доступа к микрофону. Разреши его в настройках браузера.',
+    'no-speech': 'Я ничего не услышала. Попробуй ещё раз.',
+    'audio-capture': 'Микрофон не найден. Проверь, что он подключён.',
+    'network': 'Ошибка сети при распознавании речи.',
+  };
+  return map[code] || ('Ошибка микрофона: ' + code);
+}
+
+// Озвучка с колбэком по завершении.
+function speakThen(text, cb) {
+  if (!('speechSynthesis' in window) || !text) { cb && cb(); return; }
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  u.rate = 0.95;
+  u.onend = () => cb && cb();
+  u.onerror = () => cb && cb();
+  window.speechSynthesis.speak(u);
+}
+
+/* ============================================================
+   РЕЖИМ «РАЗГОВОР» (голосом)
+   ============================================================ */
+let talkHistory = [];
+let talkRecog = null;
+let talkListening = false;
+let talkBusy = false;
+
+const talkEl = {};
+function initTalk() {
+  talkEl.log = $('#talkLog');
+  talkEl.mic = $('#talkMic');
+  talkEl.status = $('#talkStatus');
+  talkEl.level = $('#talkLevel');
+  talkEl.auto = $('#autoTalk');
+  talkEl.clear = $('#talkClear');
+
+  renderTalkEmpty();
+  talkEl.mic.addEventListener('click', toggleTalk);
+  talkEl.clear.addEventListener('click', () => {
+    if (talkListening && talkRecog) talkRecog.abort();
+    window.speechSynthesis && window.speechSynthesis.cancel();
+    talkHistory = [];
+    renderTalkEmpty();
+    setTalkStatus('Нажми на микрофон и говори по-английски');
+  });
+  const savedLvl = LS.get('met.talkLevel', null);
+  if (savedLvl) talkEl.level.value = savedLvl;
+  talkEl.level.addEventListener('change', () => LS.set('met.talkLevel', talkEl.level.value));
+}
+
+function renderTalkEmpty() {
+  talkEl.log.innerHTML = speechSupported()
+    ? '<p class="talk-empty">🎙️ Живой разговор с репетитором.<br>Нажми на микрофон, скажи что-нибудь по-английски — и Lina ответит голосом.<br><br>Включи «Без рук» для непрерывной беседы.</p>'
+    : '<p class="talk-empty">😔 Твой браузер не поддерживает распознавание речи.<br>Открой приложение в <strong>Google Chrome</strong> или <strong>Microsoft Edge</strong>, чтобы говорить голосом.</p>';
+}
+
+function setTalkStatus(t) { talkEl.status.textContent = t; }
+function talkMicActive(on) {
+  talkListening = on;
+  talkEl.mic.classList.toggle('listening', on);
+  talkEl.mic.textContent = on ? '⏹' : '🎤';
+}
+
+function toggleTalk() {
+  if (talkBusy) return;
+  if (talkListening) { if (talkRecog) talkRecog.stop(); return; }
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  startTalkListen();
+}
+
+function startTalkListen() {
+  talkRecog = listenOnce({
+    onInterim: (t) => setTalkStatus('🎤 ' + (t || '…')),
+    onError: (msg) => { talkMicActive(false); setTalkStatus(msg); },
+    onEnd: (finalText) => {
+      talkMicActive(false);
+      if (finalText) handleTalkUtterance(finalText);
+      else setTalkStatus('Не расслышала. Нажми 🎤 и повтори.');
+    },
+  });
+  if (talkRecog) { talkMicActive(true); setTalkStatus('Слушаю… говори'); }
+}
+
+function talkBubble(role, text) {
+  const wrap = document.createElement('div');
+  wrap.className = `msg ${role === 'user' ? 'user' : 'bot'}`;
+  const b = document.createElement('div');
+  b.className = 'bubble';
+  if (role === 'user') b.textContent = text; else b.innerHTML = renderMarkdown(text);
+  wrap.appendChild(b);
+  talkEl.log.appendChild(wrap);
+  talkEl.log.scrollTop = talkEl.log.scrollHeight;
+  return wrap;
+}
+
+function talkSystemPrompt() {
+  const level = talkEl.level.value;
+  return [
+    "You are Lina, a warm and encouraging English conversation partner having a SPOKEN conversation.",
+    `The learner's level is ${level}. Match your vocabulary to it.`,
+    "Your reply will be read aloud by a text-to-speech voice, so:",
+    "- Reply ONLY in English, in 1-2 short natural sentences.",
+    "- Do NOT use markdown, emojis, bullet points, or any special symbols.",
+    "- Always finish with a short, easy follow-up question to keep the conversation flowing.",
+    "If the learner made a clear English mistake, after your spoken reply add a correction block EXACTLY like:",
+    "###CORRECTION###",
+    "✅ <corrected sentence>",
+    "💡 <short explanation in Russian>",
+    "Otherwise do not add it.",
+  ].join('\n');
+}
+
+function buildTalkMessages() {
+  const msgs = [{ role: 'system', content: talkSystemPrompt() }];
+  for (const m of talkHistory.slice(-16)) msgs.push({ role: m.role, content: m.content });
+  return msgs;
+}
+
+async function handleTalkUtterance(text) {
+  // убрать заглушку при первом сообщении
+  if (talkHistory.length === 0) talkEl.log.innerHTML = '';
+  talkBubble('user', text);
+  talkHistory.push({ role: 'user', content: text });
+  bumpProgress();
+
+  talkBusy = true;
+  talkEl.mic.disabled = true;
+  setTalkStatus('Думаю…');
+
+  const wrap = talkBubble('bot', '…');
+  const bubble = wrap.querySelector('.bubble');
+  let full = '';
+  try {
+    await streamChat(buildTalkMessages(), (c) => {
+      full += c;
+      const { reply } = splitCorrection(full);
+      bubble.innerHTML = renderMarkdown(reply || '…');
+      talkEl.log.scrollTop = talkEl.log.scrollHeight;
+    });
+  } catch (err) {
+    bubble.innerHTML = '⚠️ ' + escapeHtml(err.message || String(err));
+    talkBusy = false; talkEl.mic.disabled = false;
+    setTalkStatus('Ошибка соединения. Проверь ⚙️ Настройки.');
+    return;
+  }
+
+  const { reply, correction } = splitCorrection(full);
+  bubble.innerHTML = renderMarkdown(reply);
+  if (correction) {
+    const corr = document.createElement('div');
+    corr.className = 'correction';
+    corr.innerHTML = '<strong>✍️ Исправление</strong>' + renderMarkdown(correction);
+    talkEl.log.appendChild(corr);
+  }
+  talkHistory.push({ role: 'assistant', content: reply });
+  talkEl.log.scrollTop = talkEl.log.scrollHeight;
+
+  talkBusy = false;
+  talkEl.mic.disabled = false;
+  setTalkStatus('🔊 Отвечаю…');
+  speakThen(stripMarkup(reply), () => {
+    if (talkEl.auto.checked) { setTalkStatus('Слушаю… говори'); startTalkListen(); }
+    else setTalkStatus('Нажми 🎤, чтобы ответить');
+  });
+}
+
+/* ============================================================
+   РЕЖИМ «ПРОИЗНОШЕНИЕ» (упражнения)
+   ============================================================ */
+const SENTENCE_BANK = {
+  beginner: [
+    "Hello, how are you today?",
+    "I would like a cup of coffee, please.",
+    "What time does the train leave?",
+    "My favorite color is blue.",
+    "Can you help me, please?",
+    "I am learning English every day.",
+    "The weather is very nice today.",
+    "Where is the nearest bus stop?",
+    "I have two brothers and one sister.",
+    "See you tomorrow morning.",
+  ],
+  intermediate: [
+    "I've been studying English for three years.",
+    "Could you recommend a good restaurant nearby?",
+    "I'm really looking forward to the weekend.",
+    "She usually goes to work by bus.",
+    "This is the best decision I've ever made.",
+    "I would appreciate it if you could reply soon.",
+    "Let me know if you have any questions.",
+    "We should probably leave a bit earlier.",
+  ],
+  advanced: [
+    "Despite the challenges, they managed to finish the project on time.",
+    "I'd rather stay home than go out in this weather.",
+    "The committee has yet to reach a final decision.",
+    "Had I known earlier, I would have acted differently.",
+    "Her argument was both compelling and thoroughly researched.",
+    "We need to take a variety of factors into account.",
+  ],
+};
+
+let currentSentence = '';
+let pronRecog = null;
+let pronListening = false;
+
+const pronEl = {};
+function initPron() {
+  pronEl.level = $('#pronLevel');
+  pronEl.new = $('#pronNew');
+  pronEl.ai = $('#pronAI');
+  pronEl.target = $('#pronTarget');
+  pronEl.listen = $('#pronListen');
+  pronEl.mic = $('#pronMic');
+  pronEl.status = $('#pronStatus');
+  pronEl.result = $('#pronResult');
+  pronEl.score = $('#pronScore');
+  pronEl.marked = $('#pronMarked');
+  pronEl.heard = $('#pronHeard');
+
+  const savedLvl = LS.get('met.pronLevel', null);
+  if (savedLvl) pronEl.level.value = savedLvl;
+
+  newSentence();
+  pronEl.level.addEventListener('change', () => { LS.set('met.pronLevel', pronEl.level.value); newSentence(); });
+  pronEl.new.addEventListener('click', newSentence);
+  pronEl.ai.addEventListener('click', aiSentence);
+  pronEl.listen.addEventListener('click', () => speak(currentSentence));
+  pronEl.mic.addEventListener('click', togglePron);
+  if (!speechSupported()) { pronEl.mic.disabled = true; pronEl.status.textContent = 'Распознавание речи доступно в Chrome/Edge.'; }
+}
+
+function newSentence() {
+  const bank = SENTENCE_BANK[pronEl.level.value] || SENTENCE_BANK.intermediate;
+  let s = bank[Math.floor(Math.random() * bank.length)];
+  if (s === currentSentence && bank.length > 1) s = bank[(bank.indexOf(s) + 1) % bank.length];
+  currentSentence = s;
+  pronEl.target.textContent = s;
+  pronEl.result.classList.add('hidden');
+  pronEl.status.textContent = 'Нажми 🎤 и произнеси фразу';
+}
+
+async function aiSentence() {
+  if (settings.provider === 'openai' && !settings.openaiKey) { pronEl.status.textContent = 'Для ИИ-фраз укажи API-ключ в ⚙️ Настройках.'; return; }
+  pronEl.status.textContent = '✨ Генерирую фразу…';
+  const levelName = pronEl.level.value;
+  let out = '';
+  try {
+    await streamChat([
+      { role: 'system', content: 'You generate ONE short English practice sentence for pronunciation drills. Output ONLY the sentence, nothing else. No quotes, no numbering.' },
+      { role: 'user', content: `Give me one ${levelName}-level English sentence (6-12 words) to read aloud.` },
+    ], (c) => { out += c; });
+    const s = out.replace(/^["'\s]+|["'\s]+$/g, '').split('\n')[0].trim();
+    if (s) { currentSentence = s; pronEl.target.textContent = s; pronEl.result.classList.add('hidden'); pronEl.status.textContent = 'Нажми 🎤 и произнеси фразу'; }
+    else pronEl.status.textContent = 'Не удалось сгенерировать. Попробуй ещё раз.';
+  } catch (err) {
+    pronEl.status.textContent = '⚠️ ' + (err.message || err);
+  }
+}
+
+function pronMicActive(on) {
+  pronListening = on;
+  pronEl.mic.classList.toggle('listening', on);
+  pronEl.mic.textContent = on ? '⏹' : '🎤';
+}
+
+function togglePron() {
+  if (pronListening) { if (pronRecog) pronRecog.stop(); return; }
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  pronRecog = listenOnce({
+    onInterim: (t) => { pronEl.status.textContent = '🎤 ' + (t || '…'); },
+    onError: (msg) => { pronMicActive(false); pronEl.status.textContent = msg; },
+    onEnd: (finalText) => {
+      pronMicActive(false);
+      if (finalText) scorePronunciation(finalText);
+      else pronEl.status.textContent = 'Не расслышала. Нажми 🎤 и повтори.';
+    },
+  });
+  if (pronRecog) { pronMicActive(true); pronEl.status.textContent = 'Слушаю… произнеси фразу'; }
+}
+
+function normalizeWord(w) { return w.toLowerCase().replace(/[^a-z0-9']/g, ''); }
+
+function scorePronunciation(spoken) {
+  const spokenWords = spoken.split(/\s+/).map(normalizeWord).filter(Boolean);
+  const spokenSet = new Set(spokenWords);
+  const tokens = currentSentence.split(/\s+/);
+  let total = 0, matched = 0;
+  let html = '';
+  for (const tok of tokens) {
+    const n = normalizeWord(tok);
+    if (!n) { html += escapeHtml(tok) + ' '; continue; }
+    total++;
+    const ok = spokenSet.has(n);
+    if (ok) matched++;
+    html += `<span class="${ok ? 'w-ok' : 'w-miss'}">${escapeHtml(tok)}</span> `;
+  }
+  const score = total ? Math.round((matched / total) * 100) : 0;
+
+  pronEl.result.classList.remove('hidden');
+  pronEl.score.textContent = score + '%';
+  pronEl.score.className = 'pron-score ' + (score >= 85 ? 'good' : score >= 60 ? 'ok' : 'bad');
+  pronEl.marked.innerHTML = html;
+  pronEl.heard.textContent = 'Услышала: ' + spoken;
+  pronEl.status.textContent = score >= 85 ? '🎉 Отлично!' : score >= 60 ? '👍 Неплохо, попробуй ещё раз' : '🔁 Давай попробуем снова';
+  bumpProgress();
+}
+
+function initVoice() {
+  initTalk();
+  initPron();
 }
 
 document.addEventListener('DOMContentLoaded', init);

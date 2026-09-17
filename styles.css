@@ -273,6 +273,67 @@ body {
 .conn-result.ok { color: #16a34a; }
 .conn-result.err { color: var(--danger); }
 
+/* ---- Разговор (голосом) ---- */
+.talk-toolbar {
+  display: flex; gap: 8px; align-items: center; padding: 10px 16px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.auto-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.talk-toolbar .ghost-btn { margin-left: auto; align-self: center; }
+.talk-log {
+  flex: 1; overflow-y: auto; padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.talk-empty { color: var(--muted); text-align: center; margin: auto; font-size: 15px; line-height: 1.6; padding: 20px; }
+.talk-panel {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+  background: var(--surface); border-top: 1px solid var(--border);
+}
+.talk-status { color: var(--muted); font-size: 14px; text-align: center; margin: 0; min-height: 20px; }
+
+.mic-btn {
+  width: 76px; height: 76px; border-radius: 50%; border: none; cursor: pointer;
+  background: var(--primary); color: #fff; font-size: 32px; box-shadow: var(--shadow);
+  transition: transform .1s, background .2s;
+}
+.mic-btn:hover { background: var(--primary-strong); }
+.mic-btn:active { transform: scale(.95); }
+.mic-btn.small { width: 60px; height: 60px; font-size: 26px; }
+.mic-btn.listening { background: #ef4444; animation: pulse 1.3s infinite; }
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(239,68,68,.5); }
+  70% { box-shadow: 0 0 0 18px rgba(239,68,68,0); }
+  100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+}
+.mic-btn:disabled { opacity: .5; cursor: default; }
+
+/* ---- Произношение ---- */
+.pron-toolbar {
+  display: flex; gap: 8px; align-items: center; padding: 10px 16px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.pron-toolbar .ghost-btn { margin-left: 0; align-self: center; }
+.pron-toolbar .ghost-btn:first-of-type { margin-left: auto; }
+.pron-card {
+  margin: 20px 16px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+}
+.pron-hint { color: var(--muted); font-size: 13px; margin: 0; }
+.pron-target { font-size: 22px; font-weight: 700; line-height: 1.4; margin: 0; }
+.pron-actions { display: flex; align-items: center; gap: 16px; }
+.pron-status { color: var(--muted); font-size: 14px; margin: 0; min-height: 20px; }
+.pron-result { width: 100%; border-top: 1px solid var(--border); padding-top: 14px; }
+.pron-score { font-size: 34px; font-weight: 800; }
+.pron-score.good { color: #22c55e; }
+.pron-score.ok { color: #f59e0b; }
+.pron-score.bad { color: #ef4444; }
+.pron-marked { font-size: 18px; line-height: 1.6; margin: 8px 0; }
+.pron-marked .w-ok { color: #22c55e; font-weight: 600; }
+.pron-marked .w-miss { color: #ef4444; text-decoration: underline wavy; }
+.pron-heard { color: var(--muted); font-size: 13px; margin: 0; }
+
 .hidden { display: none !important; }
 
 @media (max-width: 480px) {
