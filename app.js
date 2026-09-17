@@ -876,6 +876,7 @@ async function transcribeGroq(blob, filename) {
   const fd = new FormData();
   fd.append('file', blob, filename || 'audio.webm');
   fd.append('model', settings.sttModel || 'whisper-large-v3-turbo');
+  fd.append('language', 'en'); // это тренировка английского — распознаём как английский
   fd.append('response_format', 'json');
   const res = await fetchWithRetry(base + '/audio/transcriptions', {
     method: 'POST',
