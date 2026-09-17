@@ -1050,6 +1050,7 @@ function initTalk() {
   talkEl.type = $('#talkType');
   talkEl.typeForm = $('#talkTypeForm');
   talkEl.typeInput = $('#talkTypeInput');
+  talkEl.avatar = document.querySelector('.talk-avatar');
 
   renderTalkEmpty();
   talkEl.mic.addEventListener('click', toggleTalk);
@@ -1240,7 +1241,9 @@ async function handleTalkUtterance(text) {
   talkBusy = false;
   talkEl.mic.disabled = false;
   setTalkStatus('🔊 Отвечаю…');
+  if (talkEl.avatar) talkEl.avatar.classList.add('speaking');
   speakThen(stripMarkup(reply), () => {
+    if (talkEl.avatar) talkEl.avatar.classList.remove('speaking');
     if (talkEl.auto.checked) startTalkCapture();
     else setTalkStatus('Нажми 🎤, чтобы ответить');
   });
@@ -1292,6 +1295,7 @@ function initPron() {
   pronEl.new = $('#pronNew');
   pronEl.ai = $('#pronAI');
   pronEl.target = $('#pronTarget');
+  pronEl.targetRu = $('#pronTargetRu');
   pronEl.listen = $('#pronListen');
   pronEl.mic = $('#pronMic');
   pronEl.status = $('#pronStatus');
@@ -1319,6 +1323,16 @@ function newSentence() {
   pronEl.target.textContent = s;
   pronEl.result.classList.add('hidden');
   pronEl.status.textContent = 'Нажми 🎤 и произнеси фразу';
+  showPronTranslation(s);
+}
+
+// Показать русский перевод текущей фразы под ней.
+async function showPronTranslation(sentence) {
+  if (!pronEl.targetRu) return;
+  pronEl.targetRu.textContent = '🌐 …';
+  try {
+    pronEl.targetRu.textContent = await translateText(sentence);
+  } catch { pronEl.targetRu.textContent = ''; }
 }
 
 async function aiSentence() {
@@ -1332,7 +1346,7 @@ async function aiSentence() {
       { role: 'user', content: `Give me one ${levelName}-level English sentence (6-12 words) to read aloud.` },
     ], (c) => { out += c; });
     const s = out.replace(/^["'\s]+|["'\s]+$/g, '').split('\n')[0].trim();
-    if (s) { currentSentence = s; pronEl.target.textContent = s; pronEl.result.classList.add('hidden'); pronEl.status.textContent = 'Нажми 🎤 и произнеси фразу'; }
+    if (s) { currentSentence = s; pronEl.target.textContent = s; pronEl.result.classList.add('hidden'); pronEl.status.textContent = 'Нажми 🎤 и произнеси фразу'; showPronTranslation(s); }
     else pronEl.status.textContent = 'Не удалось сгенерировать. Попробуй ещё раз.';
   } catch (err) {
     pronEl.status.textContent = '⚠️ ' + (err.message || err);
@@ -1395,9 +1409,147 @@ function scorePronunciation(spoken) {
   bumpProgress();
 }
 
+/* ============================================================
+   ПЛАН ОБУЧЕНИЯ (персональный курс с нуля)
+   ============================================================ */
+let plan = LS.get('met.plan', null); // {title, days:[{day,topic,tasks:[]}], done:{}, config}
+const planEl = {};
+
+function initPlan() {
+  planEl.setup = $('#planSetup');
+  planEl.view = $('#planView');
+  planEl.level = $('#planLevel');
+  planEl.focus = $('#planFocus');
+  planEl.minutes = $('#planMinutes');
+  planEl.goal = $('#planGoal');
+  planEl.generate = $('#planGenerate');
+  planEl.status = $('#planStatus');
+  planEl.title = $('#planTitle');
+  planEl.progressText = $('#planProgressText');
+  planEl.barFill = $('#planBarFill');
+  planEl.days = $('#planDays');
+  planEl.reset = $('#planReset');
+
+  planEl.generate.addEventListener('click', generatePlan);
+  planEl.reset.addEventListener('click', () => {
+    if (!confirm('Составить новый план? Текущий прогресс по плану сбросится.')) return;
+    plan = null;
+    LS.set('met.plan', plan);
+    renderPlan();
+  });
+  renderPlan();
+}
+
+function renderPlan() {
+  if (!plan || !plan.days) {
+    planEl.setup.classList.remove('hidden');
+    planEl.view.classList.add('hidden');
+    return;
+  }
+  planEl.setup.classList.add('hidden');
+  planEl.view.classList.remove('hidden');
+  planEl.title.textContent = plan.title || 'Мой план';
+
+  let total = 0, done = 0;
+  planEl.days.innerHTML = '';
+  plan.days.forEach((d, di) => {
+    const card = document.createElement('div');
+    card.className = 'plan-day';
+    const head = document.createElement('div');
+    head.className = 'plan-day-head';
+    head.innerHTML = `<span class="plan-day-num">День ${d.day || di + 1}</span><span class="plan-day-topic">${escapeHtml(d.topic || '')}</span>`;
+    card.appendChild(head);
+
+    (d.tasks || []).forEach((task, ti) => {
+      total++;
+      const key = di + '-' + ti;
+      const isDone = !!(plan.done && plan.done[key]);
+      if (isDone) done++;
+      const row = document.createElement('label');
+      row.className = 'plan-task' + (isDone ? ' done' : '');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = isDone;
+      cb.onchange = () => toggleTask(di, ti);
+      const span = document.createElement('span');
+      span.textContent = task;
+      row.append(cb, span);
+      card.appendChild(row);
+    });
+
+    const practice = document.createElement('button');
+    practice.className = 'mini-btn plan-practice';
+    practice.textContent = '🎙️ Практика с Lina';
+    practice.onclick = () => startPlanPractice(d);
+    card.appendChild(practice);
+
+    planEl.days.appendChild(card);
+  });
+
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  planEl.barFill.style.width = pct + '%';
+  planEl.progressText.textContent = `Выполнено ${done} из ${total} заданий · ${pct}%`;
+}
+
+function toggleTask(di, ti) {
+  plan.done = plan.done || {};
+  const key = di + '-' + ti;
+  plan.done[key] = !plan.done[key];
+  LS.set('met.plan', plan);
+  renderPlan();
+}
+
+function startPlanPractice(day) {
+  switchTab('talk');
+  talkHistory = [];
+  talkEl.log.innerHTML = '';
+  const topic = day.topic || 'today';
+  showHintBubble(`Тема дня: ${topic}. Нажми 🎤 и начни разговор на эту тему!`);
+  setTalkStatus('Тема: ' + topic + ' — нажми 🎤');
+  // Дадим Lina контекст темы через первую подсказку
+  talkHistory.push({ role: 'assistant', content: `Let's practice talking about: ${topic}.` });
+}
+
+async function generatePlan() {
+  const level = planEl.level.value;
+  const focus = Array.from(planEl.focus.querySelectorAll('input:checked')).map((c) => c.value).join(', ') || 'разговорная речь';
+  const minutes = planEl.minutes.value;
+  const goal = planEl.goal.value.trim() || 'общее улучшение английского';
+
+  planEl.generate.disabled = true;
+  planEl.status.textContent = '✨ Lina составляет план… (это займёт несколько секунд)';
+
+  const sys = 'You are an English tutor creating a personalized study plan. Respond with STRICT JSON ONLY — no markdown, no code fences, no comments, no text before or after. Schema: {"title": string, "days": [{"day": number, "topic": string, "tasks": [string, string, string]}]}. Make exactly 7 days. Each day has exactly 3 short, concrete tasks written in RUSSIAN telling the learner what to do (for example: выучить 5 слов о ..., произнести вслух 3 предложения про ..., сыграть диалог «в кафе»). The "topic" field is in Russian. Keep each day doable in about the given minutes. Tailor everything to the learner.';
+  const usr = `Уровень: ${level}. Подтянуть: ${focus}. Минут в день: ${minutes}. Цель: ${goal}. Составь план ровно на 7 дней.`;
+
+  try {
+    let out = '';
+    await streamChat([{ role: 'system', content: sys }, { role: 'user', content: usr }], (c) => { out += c; });
+    const obj = parsePlanJson(out);
+    plan = { title: obj.title || 'Мой план', days: obj.days, done: {}, config: { level, focus, minutes, goal } };
+    LS.set('met.plan', plan);
+    planEl.status.textContent = '';
+    renderPlan();
+  } catch (err) {
+    planEl.status.textContent = '⚠️ Не удалось составить план (' + (err.message || err) + '). Попробуй ещё раз.';
+  }
+  planEl.generate.disabled = false;
+}
+
+function parsePlanJson(text) {
+  let t = (text || '').trim();
+  t = t.replace(/^```(json)?/i, '').replace(/```$/, '').trim();
+  const s = t.indexOf('{'), e = t.lastIndexOf('}');
+  if (s >= 0 && e > s) t = t.slice(s, e + 1);
+  const obj = JSON.parse(t);
+  if (!obj || !Array.isArray(obj.days) || obj.days.length === 0) throw new Error('пустой план');
+  return obj;
+}
+
 function initVoice() {
   initTalk();
   initPron();
+  initPlan();
 }
 
 document.addEventListener('DOMContentLoaded', init);

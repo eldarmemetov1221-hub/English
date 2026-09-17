@@ -148,6 +148,7 @@
         <div class="pron-card">
           <p class="pron-hint">Прочитай вслух эту фразу:</p>
           <p class="pron-target" id="pronTarget">…</p>
+          <p class="pron-target-ru" id="pronTargetRu"></p>
           <div class="pron-actions">
             <button class="mini-btn" id="pronListen">🔊 Послушать</button>
             <button class="mic-btn small" id="pronMic" aria-label="Произнести">🎤</button>
@@ -158,6 +159,50 @@
             <p class="pron-marked" id="pronMarked"></p>
             <p class="pron-heard" id="pronHeard"></p>
           </div>
+        </div>
+      </section>
+
+      <!-- ПЛАН (обучение с нуля) -->
+      <section class="tab-panel" id="tab-plan">
+        <div id="planSetup" class="plan-setup">
+          <h2>🎓 Персональный план</h2>
+          <p class="muted plan-intro">Ответь на пару вопросов — Lina составит план обучения по дням, и ты будешь двигаться шаг за шагом.</p>
+          <label class="field"><span>Твой уровень</span>
+            <select id="planLevel">
+              <option value="полный ноль, начинаю с нуля, почти ничего не знаю">С нуля (совсем новичок)</option>
+              <option value="начальный уровень A1-A2" selected>Начальный (A1–A2)</option>
+              <option value="средний уровень B1-B2">Средний (B1–B2)</option>
+            </select>
+          </label>
+          <div class="field"><span>Что хочешь подтянуть</span>
+            <div class="chips" id="planFocus">
+              <label><input type="checkbox" value="разговорная речь" checked /> Разговор</label>
+              <label><input type="checkbox" value="словарный запас" checked /> Слова</label>
+              <label><input type="checkbox" value="грамматика" /> Грамматика</label>
+              <label><input type="checkbox" value="произношение" /> Произношение</label>
+              <label><input type="checkbox" value="понимание на слух" /> На слух</label>
+            </div>
+          </div>
+          <label class="field"><span>Минут в день</span>
+            <select id="planMinutes"><option>10</option><option selected>20</option><option>30</option><option>45</option></select>
+          </label>
+          <label class="field"><span>Цель (зачем учишь) — необязательно</span>
+            <input id="planGoal" placeholder="напр. путешествия, работа, сериалы" />
+          </label>
+          <button class="primary-btn" id="planGenerate">✨ Составить план</button>
+          <p class="plan-status" id="planStatus"></p>
+        </div>
+
+        <div id="planView" class="plan-view hidden">
+          <div class="plan-head">
+            <div class="plan-head-info">
+              <h2 id="planTitle"></h2>
+              <p class="muted" id="planProgressText"></p>
+            </div>
+            <button class="ghost-btn" id="planReset">↺ Заново</button>
+          </div>
+          <div class="plan-bar"><div class="plan-bar-fill" id="planBarFill"></div></div>
+          <div id="planDays"></div>
         </div>
       </section>
 
@@ -190,6 +235,7 @@
 
     <!-- Нижняя навигация -->
     <nav class="tabbar">
+      <button class="tab-btn" data-tab="plan">🎓<span>План</span></button>
       <button class="tab-btn active" data-tab="chat">💬<span>Чат</span></button>
       <button class="tab-btn" data-tab="talk">🎙️<span>Разговор</span></button>
       <button class="tab-btn" data-tab="pron">🗣️<span>Речь</span></button>
