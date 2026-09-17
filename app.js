@@ -1036,7 +1036,14 @@ function startTalkCapture() {
     },
     onInterim: (t) => setTalkStatus('🎤 ' + (t || '…')),
     onTranscribing: () => { talkMicActive(false); setTalkStatus('Распознаю речь…'); },
-    onError: (msg) => { talkController = null; talkMicActive(false); setTalkStatus(msg); },
+    onError: (msg) => {
+      talkController = null;
+      talkMicActive(false);
+      setTalkStatus('Ошибка (см. сообщение)');
+      if (talkHistory.length === 0) talkEl.log.innerHTML = '';
+      const w = talkBubble('bot', '⚠️ ' + msg);
+      w.querySelector('.bubble').style.color = '#ef4444';
+    },
     onFinal: (text) => {
       talkController = null;
       talkMicActive(false);
