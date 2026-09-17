@@ -33,6 +33,7 @@ const defaultSettings = {
   openaiUrl: 'https://api.groq.com/openai/v1',
   openaiKey: '',
   openaiModel: 'llama-3.3-70b-versatile',
+  sttModel: 'whisper-large-v3-turbo', // модель распознавания речи (Groq Whisper)
 };
 // Порядок приоритета: значения по умолчанию → config.local.js → сохранённые в браузере.
 let settings = Object.assign(
@@ -849,6 +850,83 @@ function errText(code) {
   return map[code] || ('Ошибка микрофона: ' + code);
 }
 
+/* --- Распознавание через Groq Whisper (работает в любом браузере) --- */
+async function transcribeGroq(blob) {
+  const base = settings.openaiUrl.replace(/\/$/, '');
+  const fd = new FormData();
+  fd.append('file', blob, 'audio.webm');
+  fd.append('model', settings.sttModel || 'whisper-large-v3-turbo');
+  fd.append('language', 'en');
+  fd.append('response_format', 'json');
+  const res = await fetch(base + '/audio/transcriptions', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + settings.openaiKey },
+    body: fd,
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error('Whisper вернул ошибку ' + res.status + '. ' + t.slice(0, 150));
+  }
+  const data = await res.json().catch(() => ({}));
+  return (data.text || '').trim();
+}
+
+function whisperAvailable() {
+  return settings.provider === 'openai' && !!settings.openaiKey;
+}
+
+// Запись голоса → отправка в Whisper. Возвращает контроллер со stop()/abort().
+function beginWhisperCapture(h) {
+  let mr = null, stream = null, stopped = false;
+  const chunks = [];
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    h.onError && h.onError('Браузер не даёт доступ к микрофону. Открой приложение по https или на localhost.');
+    return { stop() {}, abort() {}, mode: 'whisper' };
+  }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => {
+    stream = s;
+    if (stopped) { s.getTracks().forEach((t) => t.stop()); return; }
+    try { mr = new MediaRecorder(s); }
+    catch { h.onError && h.onError('Этот браузер не умеет записывать звук.'); s.getTracks().forEach((t) => t.stop()); return; }
+    mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      if (chunks.length === 0) { h.onFinal && h.onFinal(''); return; }
+      h.onTranscribing && h.onTranscribing();
+      try {
+        const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
+        const text = await transcribeGroq(blob);
+        h.onFinal && h.onFinal(text);
+      } catch (err) { h.onError && h.onError(err.message || String(err)); }
+    };
+    mr.start();
+    h.onListeningStart && h.onListeningStart();
+  }).catch(() => {
+    h.onError && h.onError('Нет доступа к микрофону. Разреши доступ и открой сайт по https или на localhost.');
+  });
+  return {
+    stop() { stopped = true; if (mr && mr.state !== 'inactive') mr.stop(); },
+    abort() {
+      stopped = true;
+      if (mr && mr.state !== 'inactive') { mr.onstop = null; mr.ondataavailable = null; mr.stop(); }
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+    },
+    mode: 'whisper',
+  };
+}
+
+// Единая точка входа: Whisper (если есть ключ) или встроенное распознавание браузера.
+function beginCapture(h) {
+  if (whisperAvailable()) return beginWhisperCapture(h);
+  const r = listenOnce({
+    onInterim: h.onInterim,
+    onError: h.onError,
+    onEnd: (final) => h.onFinal && h.onFinal(final),
+  });
+  if (r) h.onListeningStart && h.onListeningStart();
+  return { stop() { r && r.stop(); }, abort() { r && r.abort(); }, mode: 'webspeech' };
+}
+
 // Озвучка с колбэком по завершении.
 function speakThen(text, cb) {
   if (!('speechSynthesis' in window) || !text) { cb && cb(); return; }
@@ -865,7 +943,7 @@ function speakThen(text, cb) {
    РЕЖИМ «РАЗГОВОР» (голосом)
    ============================================================ */
 let talkHistory = [];
-let talkRecog = null;
+let talkController = null;
 let talkListening = false;
 let talkBusy = false;
 
@@ -881,7 +959,8 @@ function initTalk() {
   renderTalkEmpty();
   talkEl.mic.addEventListener('click', toggleTalk);
   talkEl.clear.addEventListener('click', () => {
-    if (talkListening && talkRecog) talkRecog.abort();
+    if (talkController) { talkController.abort(); talkController = null; }
+    talkMicActive(false);
     window.speechSynthesis && window.speechSynthesis.cancel();
     talkHistory = [];
     renderTalkEmpty();
@@ -893,9 +972,10 @@ function initTalk() {
 }
 
 function renderTalkEmpty() {
-  talkEl.log.innerHTML = speechSupported()
+  const canVoice = whisperAvailable() || speechSupported();
+  talkEl.log.innerHTML = canVoice
     ? '<p class="talk-empty">🎙️ Живой разговор с репетитором.<br>Нажми на микрофон, скажи что-нибудь по-английски — и Lina ответит голосом.<br><br>Включи «Без рук» для непрерывной беседы.</p>'
-    : '<p class="talk-empty">😔 Твой браузер не поддерживает распознавание речи.<br>Открой приложение в <strong>Google Chrome</strong> или <strong>Microsoft Edge</strong>, чтобы говорить голосом.</p>';
+    : '<p class="talk-empty">🎙️ Чтобы говорить голосом, укажи ключ Groq в ⚙️ Настройках (распознавание пойдёт через Whisper) — или открой приложение в Chrome/Edge.</p>';
 }
 
 function setTalkStatus(t) { talkEl.status.textContent = t; }
@@ -907,22 +987,30 @@ function talkMicActive(on) {
 
 function toggleTalk() {
   if (talkBusy) return;
-  if (talkListening) { if (talkRecog) talkRecog.stop(); return; }
-  window.speechSynthesis && window.speechSynthesis.cancel();
-  startTalkListen();
+  if (talkController) { talkController.stop(); return; } // идёт запись → остановить
+  startTalkCapture();
 }
 
-function startTalkListen() {
-  talkRecog = listenOnce({
+function startTalkCapture() {
+  if (talkController || talkBusy) return;
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  talkController = beginCapture({
+    onListeningStart: () => {
+      talkMicActive(true);
+      setTalkStatus(talkController && talkController.mode === 'whisper'
+        ? '🔴 Идёт запись… нажми ⏹, когда договоришь'
+        : 'Слушаю… говори');
+    },
     onInterim: (t) => setTalkStatus('🎤 ' + (t || '…')),
-    onError: (msg) => { talkMicActive(false); setTalkStatus(msg); },
-    onEnd: (finalText) => {
+    onTranscribing: () => { talkMicActive(false); setTalkStatus('Распознаю речь…'); },
+    onError: (msg) => { talkController = null; talkMicActive(false); setTalkStatus(msg); },
+    onFinal: (text) => {
+      talkController = null;
       talkMicActive(false);
-      if (finalText) handleTalkUtterance(finalText);
+      if (text) handleTalkUtterance(text);
       else setTalkStatus('Не расслышала. Нажми 🎤 и повтори.');
     },
   });
-  if (talkRecog) { talkMicActive(true); setTalkStatus('Слушаю… говори'); }
 }
 
 function talkBubble(role, text) {
@@ -1003,7 +1091,7 @@ async function handleTalkUtterance(text) {
   talkEl.mic.disabled = false;
   setTalkStatus('🔊 Отвечаю…');
   speakThen(stripMarkup(reply), () => {
-    if (talkEl.auto.checked) { setTalkStatus('Слушаю… говори'); startTalkListen(); }
+    if (talkEl.auto.checked) startTalkCapture();
     else setTalkStatus('Нажми 🎤, чтобы ответить');
   });
 }
@@ -1045,7 +1133,7 @@ const SENTENCE_BANK = {
 };
 
 let currentSentence = '';
-let pronRecog = null;
+let pronController = null;
 let pronListening = false;
 
 const pronEl = {};
@@ -1071,7 +1159,6 @@ function initPron() {
   pronEl.ai.addEventListener('click', aiSentence);
   pronEl.listen.addEventListener('click', () => speak(currentSentence));
   pronEl.mic.addEventListener('click', togglePron);
-  if (!speechSupported()) { pronEl.mic.disabled = true; pronEl.status.textContent = 'Распознавание речи доступно в Chrome/Edge.'; }
 }
 
 function newSentence() {
@@ -1109,18 +1196,25 @@ function pronMicActive(on) {
 }
 
 function togglePron() {
-  if (pronListening) { if (pronRecog) pronRecog.stop(); return; }
+  if (pronController) { pronController.stop(); return; }
   window.speechSynthesis && window.speechSynthesis.cancel();
-  pronRecog = listenOnce({
+  pronController = beginCapture({
+    onListeningStart: () => {
+      pronMicActive(true);
+      pronEl.status.textContent = pronController && pronController.mode === 'whisper'
+        ? '🔴 Запись… нажми ⏹, когда прочитаешь'
+        : 'Слушаю… произнеси фразу';
+    },
     onInterim: (t) => { pronEl.status.textContent = '🎤 ' + (t || '…'); },
-    onError: (msg) => { pronMicActive(false); pronEl.status.textContent = msg; },
-    onEnd: (finalText) => {
+    onTranscribing: () => { pronMicActive(false); pronEl.status.textContent = 'Проверяю…'; },
+    onError: (msg) => { pronController = null; pronMicActive(false); pronEl.status.textContent = msg; },
+    onFinal: (text) => {
+      pronController = null;
       pronMicActive(false);
-      if (finalText) scorePronunciation(finalText);
+      if (text) scorePronunciation(text);
       else pronEl.status.textContent = 'Не расслышала. Нажми 🎤 и повтори.';
     },
   });
-  if (pronRecog) { pronMicActive(true); pronEl.status.textContent = 'Слушаю… произнеси фразу'; }
 }
 
 function normalizeWord(w) { return w.toLowerCase().replace(/[^a-z0-9']/g, ''); }
