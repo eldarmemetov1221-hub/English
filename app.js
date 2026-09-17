@@ -209,16 +209,11 @@ function addMessageToDOM(msg, opts = {}) {
   }
   wrap.appendChild(bubble);
 
-  // Кнопки под ответом бота
+  // Кнопки под ответом бота: озвучить + перевод
   if (msg.role === 'assistant' && !opts.streaming) {
-    const actions = document.createElement('div');
-    actions.className = 'msg-actions';
-    const speakBtn = document.createElement('button');
-    speakBtn.className = 'mini-btn';
-    speakBtn.textContent = '🔊 Озвучить';
-    speakBtn.onclick = () => speak(stripMarkup(msg.content));
-    actions.appendChild(speakBtn);
+    const { actions, out } = botActions(msg.content);
     wrap.appendChild(actions);
+    wrap.appendChild(out);
   }
 
   el.messages.appendChild(wrap);
@@ -455,6 +450,49 @@ async function streamOpenAI(messages, onToken) {
       } catch {}
     }
   }
+}
+
+/* --- Перевод текста на русский (через ту же модель) --- */
+async function translateText(text) {
+  let out = '';
+  await streamChat([
+    { role: 'system', content: 'You are a translator. Translate the user text into natural Russian. Output ONLY the translation, no quotes, no extra words.' },
+    { role: 'user', content: text },
+  ], (c) => { out += c; });
+  return out.trim();
+}
+
+/* --- Кнопки под ответом бота: озвучить + перевод --- */
+function botActions(text) {
+  const actions = document.createElement('div');
+  actions.className = 'msg-actions';
+
+  const play = document.createElement('button');
+  play.className = 'mini-btn';
+  play.textContent = '🔊';
+  play.title = 'Озвучить';
+  play.onclick = () => { unlockTTS(); speak(stripMarkup(text)); };
+
+  const tr = document.createElement('button');
+  tr.className = 'mini-btn';
+  tr.textContent = '🌐 Перевод';
+
+  const out = document.createElement('div');
+  out.className = 'translation hidden';
+
+  tr.onclick = async () => {
+    if (out.dataset.done) { out.classList.toggle('hidden'); return; }
+    tr.disabled = true; tr.textContent = '🌐 …';
+    try {
+      out.textContent = await translateText(stripMarkup(text));
+      out.dataset.done = '1';
+      out.classList.remove('hidden');
+    } catch { out.textContent = 'Не удалось перевести (сеть).'; out.classList.remove('hidden'); }
+    tr.disabled = false; tr.textContent = '🌐 Перевод';
+  };
+
+  actions.append(play, tr);
+  return { actions, out };
 }
 
 /* --- Проверка связи --- */
@@ -1008,9 +1046,27 @@ function initTalk() {
   talkEl.level = $('#talkLevel');
   talkEl.auto = $('#autoTalk');
   talkEl.clear = $('#talkClear');
+  talkEl.hint = $('#talkHint');
+  talkEl.type = $('#talkType');
+  talkEl.typeForm = $('#talkTypeForm');
+  talkEl.typeInput = $('#talkTypeInput');
 
   renderTalkEmpty();
   talkEl.mic.addEventListener('click', toggleTalk);
+  talkEl.hint.addEventListener('click', talkHint);
+  talkEl.type.addEventListener('click', () => {
+    talkEl.typeForm.classList.toggle('hidden');
+    if (!talkEl.typeForm.classList.contains('hidden')) talkEl.typeInput.focus();
+  });
+  talkEl.typeForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const t = talkEl.typeInput.value.trim();
+    if (!t || talkBusy) return;
+    talkEl.typeInput.value = '';
+    talkEl.typeForm.classList.add('hidden');
+    unlockTTS();
+    handleTalkUtterance(t);
+  });
   talkEl.clear.addEventListener('click', () => {
     if (talkController) { talkController.abort(); talkController = null; }
     talkMicActive(false);
@@ -1022,6 +1078,36 @@ function initTalk() {
   const savedLvl = LS.get('met.talkLevel', null);
   if (savedLvl) talkEl.level.value = savedLvl;
   talkEl.level.addEventListener('change', () => LS.set('met.talkLevel', talkEl.level.value));
+}
+
+async function talkHint() {
+  if (talkBusy) return;
+  setTalkStatus('💡 Подбираю фразу…');
+  try {
+    let out = '';
+    const msgs = [{ role: 'system', content: 'You help an English learner during a conversation. Suggest ONE short, natural English sentence the learner could say next. Output ONLY that sentence, no quotes, no extra words.' }];
+    for (const m of talkHistory.slice(-6)) msgs.push({ role: m.role, content: m.content });
+    if (talkHistory.length === 0) msgs.push({ role: 'user', content: 'Suggest a friendly opening line to start a conversation.' });
+    await streamChat(msgs, (c) => { out += c; });
+    const phrase = out.trim().replace(/^["']+|["']+$/g, '').split('\n')[0];
+    if (talkHistory.length === 0) talkEl.log.innerHTML = '';
+    showHintBubble(phrase);
+    setTalkStatus('Нажми 🎤 и скажи это — или свой вариант');
+  } catch { setTalkStatus('Не удалось получить подсказку (сеть).'); }
+}
+
+function showHintBubble(phrase) {
+  if (!phrase) return;
+  const div = document.createElement('div');
+  div.className = 'hint-bubble';
+  div.innerHTML = '💡 Попробуй сказать: <b>' + escapeHtml(phrase) + '</b> ';
+  const b = document.createElement('button');
+  b.className = 'mini-btn';
+  b.textContent = '🔊';
+  b.onclick = () => { unlockTTS(); speak(phrase); };
+  div.appendChild(b);
+  talkEl.log.appendChild(div);
+  talkEl.log.scrollTop = talkEl.log.scrollHeight;
 }
 
 function renderTalkEmpty() {
@@ -1139,6 +1225,9 @@ async function handleTalkUtterance(text) {
 
   const { reply, correction } = splitCorrection(full);
   bubble.innerHTML = renderMarkdown(reply);
+  const acts = botActions(reply);
+  wrap.appendChild(acts.actions);
+  wrap.appendChild(acts.out);
   if (correction) {
     const corr = document.createElement('div');
     corr.className = 'correction';

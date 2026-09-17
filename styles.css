@@ -340,3 +340,59 @@ body {
   .msg { max-width: 92%; }
   .chat-toolbar { gap: 6px; }
 }
+
+/* ============================================================
+   Разговор — стиль «звонка» (Learna-подобный) + перевод
+   ============================================================ */
+#tab-talk { background: var(--bg); }
+.talk-hero {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+  padding-top: max(14px, env(safe-area-inset-top));
+  background: linear-gradient(135deg, #4b8dff 0%, #6a5cff 100%);
+  color: #fff;
+}
+.talk-avatar {
+  width: 54px; height: 54px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center;
+  font-size: 30px; box-shadow: 0 4px 14px rgba(0,0,0,.15);
+}
+.talk-hero-info { display: flex; flex-direction: column; margin-right: auto; min-width: 0; }
+.talk-hero-info strong { font-size: 18px; }
+.talk-hero-info span { font-size: 12px; opacity: .9; }
+.talk-hero-ctrls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.hero-select { background: rgba(255,255,255,.22); color: #fff; border: none; border-radius: 8px; padding: 5px 6px; font-size: 12px; }
+.hero-select option { color: #111; }
+.talk-hero .auto-toggle { color: #fff; font-size: 11px; }
+.talk-hero .icon-btn { color: #fff; }
+
+.talk-panel { gap: 12px; }
+.talk-controls { display: flex; align-items: center; justify-content: center; gap: 34px; }
+.round-ctrl {
+  background: transparent; border: none; cursor: pointer; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 24px;
+}
+.round-ctrl span { font-size: 11px; }
+.round-ctrl:hover { color: var(--primary); }
+
+.hint-bubble {
+  align-self: center; text-align: center; background: var(--correction-bg);
+  border: 1px solid var(--correction-border); border-radius: 14px; padding: 10px 14px;
+  font-size: 14px; max-width: 92%; line-height: 1.5;
+}
+
+.translation {
+  margin-top: 4px; font-size: 14px; color: var(--text); background: var(--surface-2);
+  border-radius: 10px; padding: 7px 11px; max-width: 88%; align-self: flex-start; line-height: 1.45;
+}
+.msg.user .translation { align-self: flex-end; }
+
+.talk-type-form { display: flex; gap: 8px; padding: 8px 16px; background: var(--surface); border-top: 1px solid var(--border); }
+.talk-type-form input {
+  flex: 1; border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  border-radius: 12px; padding: 10px 12px; font-size: 15px;
+}
+.send-btn.small { width: 42px; height: 42px; font-size: 16px; }
+
+/* Немного «живости» интерфейсу */
+.stat-tile, .pron-card, .review-card, .word-item { border-radius: 18px; }
+.tab-btn.active span { font-weight: 600; }

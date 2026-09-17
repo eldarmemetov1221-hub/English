@@ -100,24 +100,34 @@
 
       <!-- РАЗГОВОР (голосом) -->
       <section class="tab-panel" id="tab-talk">
-        <div class="talk-toolbar">
-          <label class="field-inline">
-            <span>Уровень</span>
-            <select id="talkLevel">
-              <option value="Beginner (A1-A2)">Начальный (A1–A2)</option>
-              <option value="Intermediate (B1-B2)" selected>Средний (B1–B2)</option>
-              <option value="Advanced (C1-C2)">Продвинутый (C1–C2)</option>
+        <div class="talk-hero">
+          <div class="talk-avatar">🤖</div>
+          <div class="talk-hero-info">
+            <strong>Lina</strong>
+            <span id="talkHeroStatus">твой репетитор · говори голосом</span>
+          </div>
+          <div class="talk-hero-ctrls">
+            <select id="talkLevel" class="hero-select" title="Уровень">
+              <option value="Beginner (A1-A2)">A1–A2</option>
+              <option value="Intermediate (B1-B2)" selected>B1–B2</option>
+              <option value="Advanced (C1-C2)">C1–C2</option>
             </select>
-          </label>
-          <label class="auto-toggle">
-            <input type="checkbox" id="autoTalk" /> Без рук
-          </label>
-          <button class="ghost-btn" id="talkClear" title="Очистить">🗑</button>
+            <label class="auto-toggle"><input type="checkbox" id="autoTalk" /> Без рук</label>
+            <button class="icon-btn" id="talkClear" title="Очистить">🗑</button>
+          </div>
         </div>
         <div class="talk-log" id="talkLog"></div>
+        <form class="talk-type-form hidden" id="talkTypeForm" autocomplete="off">
+          <input id="talkTypeInput" placeholder="Напиши по-английски…" />
+          <button type="submit" class="send-btn small">➤</button>
+        </form>
         <div class="talk-panel">
-          <button class="mic-btn" id="talkMic" aria-label="Говорить">🎤</button>
           <p class="talk-status" id="talkStatus">Нажми на микрофон и говори по-английски</p>
+          <div class="talk-controls">
+            <button class="round-ctrl" id="talkHint" title="Подсказка">💡<span>Подсказка</span></button>
+            <button class="mic-btn" id="talkMic" aria-label="Говорить">🎤</button>
+            <button class="round-ctrl" id="talkType" title="Написать">⌨️<span>Написать</span></button>
+          </div>
         </div>
       </section>
 
