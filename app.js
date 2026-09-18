@@ -1546,10 +1546,164 @@ function parsePlanJson(text) {
   return obj;
 }
 
+/* ============================================================
+   УЧЁБА: слова по темам + правила грамматики
+   ============================================================ */
+const learnEl = {};
+let currentTheme = 0;
+const aiWordsCache = {}; // key -> [words] сгенерированные ИИ
+
+function initLearn() {
+  learnEl.chips = $('#themeChips');
+  learnEl.note = $('#themeNote');
+  learnEl.list = $('#studyList');
+  learnEl.info = $('#wordsInfo');
+  learnEl.more = $('#moreWordsBtn');
+  learnEl.grammarList = $('#grammarList');
+  learnEl.grammarView = $('#grammarView');
+  learnEl.grammarTitle = $('#grammarTitle');
+  learnEl.grammarBody = $('#grammarBody');
+  learnEl.grammarBack = $('#grammarBack');
+  learnEl.grammarAsk = $('#grammarAsk');
+  learnEl.grammarAnswer = $('#grammarAnswer');
+
+  // Подвкладки
+  document.querySelectorAll('#tab-learn .subtab').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#tab-learn .subtab').forEach((x) => x.classList.toggle('active', x === b));
+      $('#sub-words').classList.toggle('hidden', b.dataset.sub !== 'words');
+      $('#sub-grammar').classList.toggle('hidden', b.dataset.sub !== 'grammar');
+    });
+  });
+
+  renderThemeChips();
+  selectTheme(0);
+  learnEl.more.addEventListener('click', moreWords);
+
+  renderGrammarList();
+  learnEl.grammarBack.addEventListener('click', () => {
+    learnEl.grammarView.classList.add('hidden');
+    learnEl.grammarList.classList.remove('hidden');
+  });
+}
+
+function renderThemeChips() {
+  learnEl.chips.innerHTML = '';
+  (window.WORD_THEMES || []).forEach((t, i) => {
+    const b = document.createElement('button');
+    b.className = 'theme-chip' + (i === currentTheme ? ' active' : '');
+    b.innerHTML = `${t.emoji} ${escapeHtml(t.title)}`;
+    b.onclick = () => selectTheme(i);
+    learnEl.chips.appendChild(b);
+  });
+}
+
+function selectTheme(i) {
+  currentTheme = i;
+  renderThemeChips();
+  const theme = window.WORD_THEMES[i];
+  learnEl.note.textContent = theme.note || '';
+  renderStudyList();
+}
+
+function renderStudyList() {
+  const theme = window.WORD_THEMES[currentTheme];
+  const words = theme.words.concat(aiWordsCache[theme.key] || []);
+  learnEl.list.innerHTML = '';
+  learnEl.info.textContent = words.length + ' слов';
+  for (const w of words) {
+    const card = document.createElement('div');
+    card.className = 'study-card';
+    const top = document.createElement('div');
+    top.className = 'study-top';
+    top.innerHTML = `<div class="study-en">${escapeHtml(w.en)}</div><div class="study-ru">${escapeHtml(w.ru)}</div>`;
+    const ex = document.createElement('div');
+    ex.className = 'study-ex';
+    ex.textContent = w.ex || '';
+    const acts = document.createElement('div');
+    acts.className = 'study-acts';
+    const play = document.createElement('button');
+    play.className = 'mini-btn';
+    play.textContent = '🔊';
+    play.onclick = () => { unlockTTS(); speak(w.en.replace(/—/g, ',')); };
+    const add = document.createElement('button');
+    add.className = 'mini-btn';
+    add.textContent = '＋ В словарь';
+    add.onclick = () => { if (addWord(w.en, w.ru)) { add.textContent = '✓ Добавлено'; add.disabled = true; } };
+    acts.append(play, add);
+    card.append(top, ex, acts);
+    learnEl.list.appendChild(card);
+  }
+}
+
+async function moreWords() {
+  const theme = window.WORD_THEMES[currentTheme];
+  learnEl.more.disabled = true;
+  const old = learnEl.more.textContent;
+  learnEl.more.textContent = '✨ Генерирую…';
+  try {
+    let out = '';
+    await streamChat([
+      { role: 'system', content: 'You generate English vocabulary for a Russian learner. Respond with STRICT JSON only: an array of 8 objects {"en": string, "ru": string, "ex": string}. "en" = English word/phrase, "ru" = short Russian translation, "ex" = a short example sentence in English. No markdown, no extra text.' },
+      { role: 'user', content: `Тема: "${theme.title}". Дай 8 НОВЫХ полезных слов по этой теме (не самых базовых).` },
+    ], (c) => { out += c; });
+    let t = out.trim().replace(/^```(json)?/i, '').replace(/```$/, '').trim();
+    const s = t.indexOf('['), e = t.lastIndexOf(']');
+    if (s >= 0 && e > s) t = t.slice(s, e + 1);
+    const arr = JSON.parse(t);
+    aiWordsCache[theme.key] = (aiWordsCache[theme.key] || []).concat(arr.filter((w) => w && w.en));
+    renderStudyList();
+  } catch {
+    learnEl.info.textContent = 'Не удалось получить слова (сеть). Попробуй ещё раз.';
+  }
+  learnEl.more.disabled = false;
+  learnEl.more.textContent = old;
+}
+
+function renderGrammarList() {
+  learnEl.grammarList.innerHTML = '';
+  (window.GRAMMAR_LESSONS || []).forEach((g) => {
+    const card = document.createElement('button');
+    card.className = 'grammar-card';
+    card.innerHTML = `<span class="grammar-emoji">${g.emoji}</span><span>${escapeHtml(g.title)}</span><span class="grammar-arrow">›</span>`;
+    card.onclick = () => openGrammar(g);
+    learnEl.grammarList.appendChild(card);
+  });
+}
+
+let currentLesson = null;
+function openGrammar(g) {
+  currentLesson = g;
+  learnEl.grammarList.classList.add('hidden');
+  learnEl.grammarView.classList.remove('hidden');
+  learnEl.grammarTitle.textContent = g.emoji + ' ' + g.title;
+  learnEl.grammarBody.innerHTML = renderMarkdown(g.body);
+  learnEl.grammarAnswer.innerHTML = '';
+  learnEl.grammarAsk.disabled = false;
+  learnEl.grammarAsk.onclick = () => askGrammar(g);
+  learnEl.grammarView.scrollTop = 0;
+}
+
+async function askGrammar(g) {
+  learnEl.grammarAsk.disabled = true;
+  learnEl.grammarAnswer.innerHTML = '<p class="muted">Lina печатает…</p>';
+  try {
+    let out = '';
+    await streamChat([
+      { role: 'system', content: 'You are a friendly English teacher explaining grammar to a Russian speaker. Explain in Russian, simply, with several clear English examples. Use short paragraphs.' },
+      { role: 'user', content: `Объясни подробнее тему «${g.title}» с дополнительными примерами и типичными ошибками.` },
+    ], (c) => { out += c; learnEl.grammarAnswer.innerHTML = renderMarkdown(out); });
+  } catch {
+    learnEl.grammarAnswer.innerHTML = '<p class="muted">Не удалось получить ответ (сеть).</p>';
+  }
+  learnEl.grammarAsk.disabled = false;
+}
+
 function initVoice() {
   initTalk();
   initPron();
   initPlan();
+  initLearn();
 }
 
 document.addEventListener('DOMContentLoaded', init);

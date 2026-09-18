@@ -440,3 +440,56 @@ body {
 .tab-btn { font-size: 19px; }
 .tab-btn span { font-size: 10px; }
 @media (max-width: 380px) { .tab-btn span { font-size: 9px; } }
+
+/* ============================================================
+   Учёба: слова + грамматика
+   ============================================================ */
+#tab-learn { overflow: hidden; }
+.learn-subtabs { display: flex; gap: 8px; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.subtab {
+  flex: 1; background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 12px; padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.subtab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.learn-sub { flex: 1; overflow-y: auto; display: flex; flex-direction: column; min-height: 0; }
+
+.theme-chips { display: flex; gap: 8px; overflow-x: auto; padding: 12px 16px 4px; -webkit-overflow-scrolling: touch; }
+.theme-chip {
+  flex: 0 0 auto; background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 999px; padding: 8px 14px; font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.theme-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.theme-note { padding: 4px 16px 0; margin: 0; font-size: 13px; }
+.learn-actions { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
+.learn-actions .ghost-btn { margin: 0; }
+
+.study-list { padding: 0 16px 24px; display: flex; flex-direction: column; gap: 10px; }
+.study-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; box-shadow: var(--shadow); }
+.study-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.study-en { font-size: 17px; font-weight: 700; }
+.study-ru { color: var(--muted); font-size: 15px; }
+.study-ex { margin-top: 6px; font-size: 14px; color: var(--text); font-style: italic; opacity: .85; }
+.study-acts { display: flex; gap: 8px; margin-top: 10px; }
+
+.grammar-list { padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 10px; }
+.grammar-card {
+  display: flex; align-items: center; gap: 12px; text-align: left; width: 100%;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 14px; font-size: 15px; font-weight: 600; color: var(--text); cursor: pointer; box-shadow: var(--shadow);
+}
+.grammar-emoji { font-size: 22px; }
+.grammar-arrow { margin-left: auto; color: var(--muted); font-size: 22px; }
+.grammar-view { padding: 12px 16px 28px; overflow-y: auto; }
+.grammar-view h2 { margin: 8px 0 12px; }
+.grammar-view .ghost-btn { margin: 0 0 6px; }
+.grammar-body { font-size: 15px; line-height: 1.65; }
+.grammar-body p { margin: 0 0 10px; }
+.grammar-body strong { color: var(--primary-strong); }
+.grammar-view .primary-btn { margin-top: 16px; width: 100%; }
+.grammar-answer { margin-top: 14px; font-size: 15px; line-height: 1.6; }
+.grammar-answer p { margin: 0 0 8px; }
+
+/* Таб-бар: 7 вкладок — компактно, при нехватке места прокрутка */
+.tabbar { overflow-x: auto; scrollbar-width: none; }
+.tabbar::-webkit-scrollbar { display: none; }
+.tab-btn { flex: 1 0 auto; min-width: 52px; }

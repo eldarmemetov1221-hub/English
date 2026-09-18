@@ -162,6 +162,35 @@
         </div>
       </section>
 
+      <!-- УЧЁБА (слова + грамматика) -->
+      <section class="tab-panel" id="tab-learn">
+        <div class="learn-subtabs">
+          <button class="subtab active" data-sub="words">📖 Слова</button>
+          <button class="subtab" data-sub="grammar">📐 Правила</button>
+        </div>
+
+        <div class="learn-sub" id="sub-words">
+          <div class="theme-chips" id="themeChips"></div>
+          <p class="theme-note muted" id="themeNote"></p>
+          <div class="learn-actions">
+            <button class="ghost-btn" id="moreWordsBtn">✨ Ещё слова от ИИ</button>
+            <span class="muted" id="wordsInfo"></span>
+          </div>
+          <div class="study-list" id="studyList"></div>
+        </div>
+
+        <div class="learn-sub hidden" id="sub-grammar">
+          <div class="grammar-list" id="grammarList"></div>
+          <div class="grammar-view hidden" id="grammarView">
+            <button class="ghost-btn" id="grammarBack">← Назад к правилам</button>
+            <h2 id="grammarTitle"></h2>
+            <div id="grammarBody" class="grammar-body"></div>
+            <button class="primary-btn" id="grammarAsk">🤖 Спросить у Lina подробнее / примеры</button>
+            <div id="grammarAnswer" class="grammar-answer"></div>
+          </div>
+        </div>
+      </section>
+
       <!-- ПЛАН (обучение с нуля) -->
       <section class="tab-panel" id="tab-plan">
         <div id="planSetup" class="plan-setup">
@@ -236,6 +265,7 @@
     <!-- Нижняя навигация -->
     <nav class="tabbar">
       <button class="tab-btn" data-tab="plan">🎓<span>План</span></button>
+      <button class="tab-btn" data-tab="learn">📖<span>Учёба</span></button>
       <button class="tab-btn active" data-tab="chat">💬<span>Чат</span></button>
       <button class="tab-btn" data-tab="talk">🎙️<span>Разговор</span></button>
       <button class="tab-btn" data-tab="pron">🗣️<span>Речь</span></button>
@@ -307,6 +337,7 @@
 
   <!-- Необязательный локальный конфиг (не пушится в git). Если файла нет — ничего страшного. -->
   <script src="config.local.js" onerror="this.remove()"></script>
+  <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
